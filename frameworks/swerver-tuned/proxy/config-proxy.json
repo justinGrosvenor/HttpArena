@@ -41,6 +41,10 @@
     }
   ],
   "routes": [
-    { "path_prefix": "/", "upstream": "backend" }
+    {
+      "path_prefix": "/",
+      "upstream": "backend",
+      "retry": { "max_retries": 6 }
+    }
   ]
 }

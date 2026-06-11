@@ -48,6 +48,10 @@ services:
       - WARM_PORT=8090
       - DATABASE_URL=${DATABASE_URL}
       - DATABASE_MAX_CONN=256
+      # Widen the PG op deadline: behind the gateway the backend competes with
+      # the proxy + the still-running isolated container for CPU, so the default
+      # 5s is too tight for a starved worker and async-db 503s.
+      - STMT_TIMEOUT=25000
     volumes:
       - ${DATA_DIR}/static:/data/static:ro
       - ${DATA_DIR}/dataset.json:/data/dataset.json:ro

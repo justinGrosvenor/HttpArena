@@ -25,7 +25,7 @@ RUN set -eux; \
     zig version
 
 WORKDIR /src
-RUN git clone --depth 1 --branch v0.1.0-alpha.20 \
+RUN git clone --depth 1 --branch v0.1.0-alpha.21 \
         https://github.com/justinGrosvenor/swerver.git .
 
 RUN MULTIARCH=$(dpkg-architecture -qDEB_HOST_MULTIARCH); \

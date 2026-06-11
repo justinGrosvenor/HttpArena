@@ -41,10 +41,18 @@ if [ -n "${DATABASE_URL:-}" ]; then
     [ "$POOL" -lt 1 ] && POOL=1
     [ "$POOL" -gt 4 ] && POOL=4
 
-    jq --arg url "$pg_url" --argjson pool "$POOL" \
-        '.postgres = {url: $url, password_env: "PGPASSWORD", pool_size_per_worker: $pool}' \
+    # Per-op deadline for the PG client. The default 5s is fine for the isolated
+    # profiles, but behind the gateway the backend shares cores with the proxy
+    # AND the still-running isolated container, so a CPU-starved worker can take
+    # longer than 5s to drive a query's send/recv — the op then times out and
+    # surfaces as a 503 on every worker (retries can't help). STMT_TIMEOUT lets
+    # the gateway backend widen it.
+    STMT="${STMT_TIMEOUT:-5000}"
+
+    jq --arg url "$pg_url" --argjson pool "$POOL" --argjson stmt "$STMT" \
+        '.postgres = {url: $url, password_env: "PGPASSWORD", pool_size_per_worker: $pool, statement_timeout_ms: $stmt}' \
         "$CONFIG" > /tmp/cfg.json && mv /tmp/cfg.json "$CONFIG"
-    echo "entrypoint: postgres enabled ($pg_url) pool_size_per_worker=$POOL (nproc=$NCPU, max_conn=$MAXC)"
+    echo "entrypoint: postgres enabled ($pg_url) pool_size_per_worker=$POOL statement_timeout_ms=$STMT (nproc=$NCPU, max_conn=$MAXC)"
 fi
 
 /usr/local/bin/swerver --config "$CONFIG" &
