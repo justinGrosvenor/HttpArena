@@ -1,10 +1,14 @@
+# swerver-as-gateway edge: a pure swerver reverse proxy terminating TLS + h2 + h3
+# on 8443 and forwarding every endpoint to the swerver-tuned backend over h1.
+# "tuned" here is the backend (precompressed static cache, async PG); the edge
+# is stock swerver acting as its own API gateway (no Caddy) — swerver ships a
+# full reverse proxy, so the gateway profile exercises swerver end to end.
 FROM debian:trixie AS build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl xz-utils git libssl-dev zlib1g-dev dpkg-dev pkg-config python3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Zig 0.16.0 stable
 RUN set -eux; \
     DPKG_ARCH=$(dpkg --print-architecture); \
     case "${DPKG_ARCH}" in \
@@ -20,35 +24,30 @@ RUN set -eux; \
     ln -s /opt/zig/zig /usr/local/bin/zig; \
     zig version
 
-# Clone swerver library
 WORKDIR /src
 RUN git clone --depth 1 --branch v0.1.0-alpha.20 \
         https://github.com/justinGrosvenor/swerver.git .
 
-# Symlink OpenSSL for Zig's linker
 RUN MULTIARCH=$(dpkg-architecture -qDEB_HOST_MULTIARCH); \
     for lib in libssl.so libssl.a libcrypto.so libcrypto.a; do \
         ln -sf "/usr/lib/${MULTIARCH}/${lib}" "/usr/lib/${lib}"; \
     done
 
-# Copy HttpArena application source into swerver tree and build
-COPY main.zig db_routes.zig build.zig build.zig.zon /src/httparena/
-WORKDIR /src/httparena
-RUN zig build --summary all
+# Pure swerver binary with TLS + h2 + h3 + reverse-proxy support. ReleaseFast
+# is required, not just for speed: the default Debug build overflows the forked
+# worker's stack zeroing the HTTP/2 stack struct (http2.zig init).
+RUN zig build -Doptimize=ReleaseFast -Denable-tls=true -Denable-http2=true -Denable-http3=true -Denable-proxy=true --summary all
 
 # ── runtime stage ──
 FROM debian:trixie-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates libssl3 jq curl \
+        ca-certificates libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /src/httparena/zig-out/bin/swerver-httparena /usr/local/bin/swerver
-COPY config-multi.json /etc/swerver/config-multi.json
-COPY config-gateway-backend.json /etc/swerver/config-gateway-backend.json
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+COPY --from=build /src/zig-out/bin/swerver /usr/local/bin/swerver
+COPY config-proxy.json /etc/swerver/config-proxy.json
 
-EXPOSE 8080 8081 8082 8443/tcp 8443/udp
+EXPOSE 8443/tcp 8443/udp
 
-CMD ["/usr/local/bin/entrypoint.sh"]
+CMD ["/usr/local/bin/swerver", "--config", "/etc/swerver/config-proxy.json"]

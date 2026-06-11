@@ -23,7 +23,11 @@
     "baseline-h3",
     "static-h3",
     "async-db",
-    "fortunes"
+    "fortunes",
+    "gateway-64",
+    "gateway-h3"
   ],
-  "maintainers": ["justinGrosvenor"]
+  "maintainers": [
+    "justinGrosvenor"
+  ]
 }

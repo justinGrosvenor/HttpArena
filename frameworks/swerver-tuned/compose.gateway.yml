@@ -1,0 +1,67 @@
+# gateway-64 — swerver as its own API gateway: a pure swerver reverse proxy
+# terminates TLS + h2 (+ h3) on 8443 and forwards every endpoint to the
+# swerver-tuned backend (plaintext h1 on 8090). No Caddy — swerver ships a full
+# reverse proxy, so this exercises swerver edge-to-origin. Both services share
+# the host net namespace so the proxy reaches the backend on 127.0.0.1:8090 and
+# the backend reaches the Postgres sidecar on 127.0.0.1:5432.
+#
+# The proxy and backend run on DISJOINT cpusets. Each is workers:0 = nproc, so
+# without a split they'd both spawn a full set of workers and 2x-oversubscribe
+# the cores — which flakes the latency-sensitive async-db (park-resume) path
+# exactly like the old 4-instance layout. The cpuset confines each to its own
+# cores; nproc (sched_getaffinity) then sizes the workers to that half. Defaults
+# match the leaderboard rig; override PROXY_CPUSET / SERVER_CPUSET per host.
+services:
+  proxy:
+    build:
+      context: ./proxy
+    network_mode: host
+    cpuset: "${PROXY_CPUSET:-0-15,64-79}"
+    ulimits:
+      memlock: -1
+      nofile:
+        soft: 1048576
+        hard: 1048576
+    security_opt:
+      - seccomp:unconfined
+    volumes:
+      - ${CERTS_DIR}:/certs:ro
+    depends_on:
+      server:
+        condition: service_healthy
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    network_mode: host
+    cpuset: "${SERVER_CPUSET:-16-31,80-95}"
+    ulimits:
+      memlock: -1
+      nofile:
+        soft: 1048576
+        hard: 1048576
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      - CONFIG=/etc/swerver/config-gateway-backend.json
+      - WARM_PORT=8090
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_MAX_CONN=256
+    volumes:
+      - ${DATA_DIR}/static:/data/static:ro
+      - ${DATA_DIR}/dataset.json:/data/dataset.json:ro
+    # Healthy only once the backend actually serves async-db — a populated range
+    # returning 50 items AND the empty range returning 0 — so the proxy (hence
+    # the harness's edge-readiness probe) doesn't come up while the PG pools are
+    # still warming and 503 the first DB query.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          curl -sf 'http://127.0.0.1:8090/async-db?min=10&max=50&limit=50' | grep -q '"count":50'
+          && curl -sf 'http://127.0.0.1:8090/async-db?min=9999&max=9999&limit=50' | grep -q '"count":0'
+      interval: 2s
+      timeout: 5s
+      retries: 40
+      start_period: 3s

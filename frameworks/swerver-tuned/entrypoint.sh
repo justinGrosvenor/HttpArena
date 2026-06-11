@@ -6,6 +6,13 @@ set -e
 # process with the normal nproc workers — no 4-instance × nproc CPU
 # over-subscription, which previously flaked the DB/TLS profiles under
 # un-pinned validation.
+#
+# CONFIG selects the config file; default is the isolated-profile multi-listener
+# config. The gateway profiles override it to the plaintext h1 backend config
+# (the swerver proxy edge fronts it). WARM_PORT is the port the pool-warm probe
+# hits (matches the config's plaintext port).
+CONFIG="${CONFIG:-/etc/swerver/config-multi.json}"
+WARM_PORT="${WARM_PORT:-8080}"
 
 # Database profiles (async-db, fortunes) run over plaintext HTTP/1.1 and the
 # harness provides connection details via DATABASE_URL. swerver reads Postgres
@@ -36,11 +43,11 @@ if [ -n "${DATABASE_URL:-}" ]; then
 
     jq --arg url "$pg_url" --argjson pool "$POOL" \
         '.postgres = {url: $url, password_env: "PGPASSWORD", pool_size_per_worker: $pool}' \
-        /etc/swerver/config-multi.json > /tmp/config-multi.json && mv /tmp/config-multi.json /etc/swerver/config-multi.json
+        "$CONFIG" > /tmp/cfg.json && mv /tmp/cfg.json "$CONFIG"
     echo "entrypoint: postgres enabled ($pg_url) pool_size_per_worker=$POOL (nproc=$NCPU, max_conn=$MAXC)"
 fi
 
-/usr/local/bin/swerver --config /etc/swerver/config-multi.json &
+/usr/local/bin/swerver --config "$CONFIG" &
 SRV_PID=$!
 
 if [ -n "${DATABASE_URL:-}" ]; then
@@ -53,7 +60,7 @@ if [ -n "${DATABASE_URL:-}" ]; then
     streak=0; need=25
     for i in $(seq 1 120); do
         code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 \
-            "http://127.0.0.1:8080/async-db?min=10&max=50&limit=1" 2>/dev/null || echo 000)
+            "http://127.0.0.1:${WARM_PORT}/async-db?min=10&max=50&limit=1" 2>/dev/null || echo 000)
         if [ "$code" = "200" ]; then
             streak=$((streak + 1))
             if [ "$streak" -ge "$need" ]; then
