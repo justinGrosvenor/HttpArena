@@ -1,10 +1,11 @@
 //! PostgreSQL-backed benchmark endpoints for the HttpArena swerver target.
 //!
-//!   GET /async-db?min&max&limit — `limit` independent random-id reads of the
-//!     `items` table (ids drawn uniformly in [min,max]); JSON
-//!     {"count":N,"items":[{...,"active":bool,"tags":[...],"rating":{...}}]}.
-//!     Empty id range → zero matching rows → count=0 (anti-cheat).
-//!   GET /fortunes — every `fortune` row plus one injected at request time,
+//!   GET /async-db?min&max&limit: one range query over the `items` table,
+//!     `select ... where price between $min and $max limit $limit` (min/max are
+//!     price bounds; limit defaults 50, clamped 1..50). JSON
+//!     {"items":[{...,"active":bool,"tags":[...],"rating":{...}}],"count":N}.
+//!     An empty price range yields zero rows, count=0 (anti-cheat).
+//!   GET /fortunes: every `fortune` row plus one injected at request time,
 //!     sorted by message, rendered as an HTML-escaped table.
 //!
 //! Both use the swerver park-and-resume PG API (swerver.db.pg.handler_api):
