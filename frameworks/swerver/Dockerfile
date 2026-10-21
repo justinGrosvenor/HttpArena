@@ -2,6 +2,7 @@ FROM debian:trixie AS build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl xz-utils git libssl-dev zlib1g-dev dpkg-dev pkg-config python3 \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libssl3t64)" ge '3.5.7-1~deb13u3' \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Zig 0.16.0 stable
@@ -40,7 +41,8 @@ RUN zig build --summary all
 FROM debian:trixie-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates libssl3 jq curl \
+        ca-certificates libssl3t64 jq curl \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libssl3t64)" ge '3.5.7-1~deb13u3' \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /src/httparena/zig-out/bin/swerver-httparena /usr/local/bin/swerver
