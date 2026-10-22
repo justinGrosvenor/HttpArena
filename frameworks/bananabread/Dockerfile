@@ -6,11 +6,11 @@
 # routes them correctly and is faster besides. So we take the Debian (glibc) image for its
 # tooling and replace bun with the AVX2 build. glibc, not alpine/musl, because the prebuilt
 # AVX2 binary the installer fetches here is glibc-linked.
-FROM oven/bun:1
+FROM oven/bun:1.4.4@sha256:1d22548f177f4ff38e0c15baa3c2c46c6c2060ba2d1bc573bb4720b407548f1d
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git ca-certificates curl unzip \
  && rm -rf /var/lib/apt/lists/* \
- && curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.14" \
+ && curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4" \
  && cp -f /root/.bun/bin/bun "$(command -v bun)" \
  && rm -rf /root/.bun \
  && echo "bun build flavor: $(bun -e 'throw 0' 2>&1 | grep -o 'Linux x64[^)]*')"
