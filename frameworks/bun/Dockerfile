@@ -1,6 +1,6 @@
-# 1.4.1 is the floor: `http2: true` shipped there (oven-sh/bun#40137) and 1.4.0
+# 1.4.4 fixes CVE-2026-111497. HTTP/2 needs at least 1.4.1: `http2: true` shipped there (oven-sh/bun#40137) and 1.4.0
 # ignores the flag rather than rejecting it, so :8082 and :8443 answer HTTP/1.1.
-ARG BUN_VERSION=1.4.1
+ARG BUN_VERSION=1.4.4
 FROM oven/bun:${BUN_VERSION}
 WORKDIR /app
 COPY server.ts entrypoint.sh ./
