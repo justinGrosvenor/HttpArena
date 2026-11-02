@@ -1,0 +1,11 @@
+{
+  "name": "swerver-ts-httparena",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "swerver-ts": "0.1.3"
+  },
+  "engines": {
+    "bun": ">=1.4.4"
+  }
+}

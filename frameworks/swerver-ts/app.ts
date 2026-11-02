@@ -1,9 +1,9 @@
-// HttpArena entry for swerverts: TypeScript route handlers running in-process on
+// HttpArena entry for swerver-ts: TypeScript route handlers running in-process on
 // the swerver engine via the FFI backend. Dynamic routes (/plaintext, /pipeline,
 // /baseline*, /json) are TS handlers reached through libswerver's park/resume
 // bridge; static files and the HTTP/2-cleartext listener are served by the
 // engine natively. Fork-per-core (workers) fans out via SO_REUSEPORT on Linux.
-import { Swerver } from "swerverts";
+import { Swerver } from "swerver-ts";
 
 const datasetPath = process.env["DATASET_PATH"] ?? "/data/dataset.json";
 const staticDir = process.env["STATIC_DIR"] ?? "/data/static";
@@ -54,7 +54,7 @@ const app = new Swerver({ backend: "ffi", workers, port: 8080 })
   });
 
 const server = await app.start();
-console.log(`swerverts httparena up (workers=${workers || "auto"}) ${server.url}`);
+console.log(`swerver-ts httparena up (workers=${workers || "auto"}) ${server.url}`);
 const stop = async () => { await server.stop(); process.exit(0); };
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);

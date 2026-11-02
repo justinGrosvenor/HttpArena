@@ -1,6 +1,6 @@
-FROM oven/bun:1
+FROM oven/bun:1.4.4
 WORKDIR /app
-# swerverts pulls its engine (binary + libswerver) as an optionalDependency
+# swerver-ts pulls its engine (binary + libswerver) as an optionalDependency
 # prebuilt matching the container's platform (esbuild-style) — no build step.
 COPY package.json ./
 RUN bun install
