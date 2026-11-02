@@ -228,6 +228,17 @@ def load(name):
         return None
 
 
+@functools.lru_cache(maxsize=1)
+def _framework_labels():
+    """Presentation names only; result IDs, URLs and archived logs stay stable."""
+    return {name: m["display_name"] for name, m in (load("frameworks.json") or {}).items()
+            if m.get("display_name")}
+
+
+def _fw_label(name):
+    return _framework_labels().get(name, name)
+
+
 # ── Knowledge Base (docs) ─────────────────────────────────────────────────
 # Pull the docs content into the standalone leaderboard so the Knowledge Base
 # is self-contained - no links into the Hugo site. This carries the same *data*,
@@ -1972,7 +1983,7 @@ def _ranking_node(scope, rows):
         # Every listed entry has a page of its own, so the list points at it. A
         # ListItem with a name and no url is a string in a list; with one it is
         # the same ranking the reader can click through.
-        "itemListElement": [{"@type": "ListItem", "position": i + 1, "name": fw,
+        "itemListElement": [{"@type": "ListItem", "position": i + 1, "name": _fw_label(fw),
                              "url": SITE + _fw_url(fw)}
                             for i, (fw, _) in enumerate(listed)],
     }
@@ -2009,7 +2020,7 @@ def write_data_json(payload):
 
 
 def _rank_lines(rows, fw_lang, limit=None):
-    return ["%3d. %-26s %-14s %6.0f" % (i + 1, fw, fw_lang.get(fw, "") or "-", score)
+    return ["%3d. %-26s %-14s %6.0f" % (i + 1, _fw_label(fw), fw_lang.get(fw, "") or "-", score)
             for i, (fw, score) in enumerate(rows[:limit] if limit else rows)]
 
 
@@ -2054,7 +2065,7 @@ def write_llms_txt(tree, content, families, fw_lang, current, round_name, fw_ent
     if fw_entries:
         frameworks = [f"## Frameworks ({len(fw_entries)} entries, one results page each)", ""]
         for fw, lang, kind in fw_entries:
-            frameworks.append(f"- [{fw}]({SITE}{_fw_url(fw)}): "
+            frameworks.append(f"- [{_fw_label(fw)}]({SITE}{_fw_url(fw)}): "
                               + ", ".join(x for x in [lang, TYPE_LABEL.get(kind, kind)] if x)
                               + ". Rank per family and every per-profile number.")
         frameworks.append("")
@@ -2116,7 +2127,7 @@ def _static_board(rows, fw_lang, round_name):
         body.append('<tr><td class="n%s">%d</td><td><a href="%s">%s</a></td>'
                     '<td class="sb-lang">%s</td><td class="n">%.0f</td></tr>'
                     % (" r%d" % rank if rank <= 3 else "", rank, _fw_url(fw),
-                       _html.escape(fw), _html.escape(fw_lang.get(fw, "") or ""), score))
+                       _html.escape(_fw_label(fw)), _html.escape(fw_lang.get(fw, "") or ""), score))
     others = ", ".join(SCOPE_NAME[s] for s in SCOPE_NAME if s != DEFAULT_SCOPE)
     return ('<table class="sb"><thead><tr><th>#</th><th>Framework</th><th>Language</th>'
             '<th class="n">Composite</th></tr></thead><tbody>' + "".join(body) + "</tbody></table>"
@@ -2173,13 +2184,13 @@ def _board_faq(rows, fw_lang, current, round_name, n_profiles, n_entries):
          "sum is then reduced by 2.5%% for each of routing, middleware, the request it hands you "
          "and the response it builds that the entry does not do for you, so a framework that "
          "does none of the four keeps 90%% of what it scored on throughput."
-         % (e(lead[0]), " (%s)" % e(lead[2]) if lead[2] else "", SCOPE_NAME[DEFAULT_SCOPE],
-            lead[1], ", ".join("%s (%.0f)" % (e(f), sc) for f, sc, _l in top[1:2]),
-            ", ".join("%s (%.0f)" % (e(f), sc) for f, sc, _l in top[2:3]))),
+         % (e(_fw_label(lead[0])), " (%s)" % e(lead[2]) if lead[2] else "", SCOPE_NAME[DEFAULT_SCOPE],
+            lead[1], ", ".join("%s (%.0f)" % (e(_fw_label(f)), sc) for f, sc, _l in top[1:2]),
+            ", ".join("%s (%.0f)" % (e(_fw_label(f)), sc) for f, sc, _l in top[2:3]))),
         ("Which language has the fastest web frameworks?",
          "%s, through %s. The quickest entry of each language on %s: %s."
-         % (e(lead[2] or "-"), e(lead[0]), SCOPE_NAME[DEFAULT_SCOPE],
-            ", ".join("%s %s (%.0f)" % (e(lang), e(fw), sc)
+         % (e(lead[2] or "-"), e(_fw_label(lead[0])), SCOPE_NAME[DEFAULT_SCOPE],
+            ", ".join("%s %s (%.0f)" % (e(lang), e(_fw_label(fw)), sc)
                       for lang, fw, sc in by_lang[:8]))),
         ("How many web frameworks are benchmarked?",
          "%d entries - web frameworks, HTTP engines and reverse proxies - over %d test "
@@ -2457,9 +2468,9 @@ def _fw_compare(fw, lang, scopes, lang_url, has_compare=False):
     # one of it - the F# entry, say - had no way to be compared with anything at
     # all before /compare/all/ existed (#1222).
     links = ("<p>" + ('<a href="%s">Compare %s with any %s entry</a> · '
-                      % (cmp_url, e(fw), e(lang)) if has_compare else "")
+                      % (cmp_url, e(_fw_label(fw)), e(lang)) if has_compare else "")
              + '<a href="%s#%s">Compare %s with any entry, in any language</a>'
-               % (_compare_url(None), quote(fw), e(fw))
+               % (_compare_url(None), quote(fw), e(_fw_label(fw)))
              + (' · <a href="%s">Every %s entry, ranked</a>' % (lang_url, e(lang))
                 if lang_url else "") + "</p>")
     # Nothing to put in a table: the links still belong on the page, a heading
@@ -2472,7 +2483,7 @@ def _fw_compare(fw, lang, scopes, lang_url, has_compare=False):
         near = [0] + near
     body = "".join(
         '<tr><td><a href="%s">%s</a></td><td class="n">%.0f</td><td class="n">%s</td>%s</tr>'
-        % (_fw_url(rows[j][0]), e(rows[j][0]), rows[j][3],
+        % (_fw_url(rows[j][0]), e(_fw_label(rows[j][0])), rows[j][3],
            ("+%.0f%%" if rows[j][3] >= mine else "%.0f%%")
            % ((rows[j][3] - mine) / mine * 100 if mine else 0),
            ('<td><a href="%s#%s-vs-%s">head to head</a></td>'
@@ -2480,11 +2491,11 @@ def _fw_compare(fw, lang, scopes, lang_url, has_compare=False):
         for j in sorted(set(near)))
     return ("<h2 id=\"compare\">Compared with</h2>"
             "<p>The %s entries around %s on the %s composite, and the one leading them.%s</p>"
-            % (e(lang), e(fw), SCOPE_NAME.get(scope, scope),
+            % (e(lang), e(_fw_label(fw)), SCOPE_NAME.get(scope, scope),
                " The last column shows every profile side by side." if has_compare else "")
             + "<table><thead><tr><th>Entry</th><th class=\"n\">Composite</th>"
               "<th class=\"n\">vs %s</th>%s</tr></thead><tbody>"
-              % (e(fw), "<th></th>" if has_compare else "")
+              % (e(_fw_label(fw)), "<th></th>" if has_compare else "")
             + body + "</tbody></table>" + links)
 
 
@@ -2570,8 +2581,9 @@ def _fw_body(fw, m, lang, ranks, runs, round_name, lang_url="", achievements=(),
 def _fw_page(fw, m, lang, ranks, runs, round_name, og_url, lang_url="", achievements=(),
              lang_scopes=None, updated="", has_compare=False):
     e = _html.escape
+    label = m.get("display_name") or fw
     url = SITE + _fw_url(fw)
-    title = f"{fw} performance benchmark & ranking"
+    title = f"{label} performance benchmark & ranking"
     # the main family when the entry runs it, its first one otherwise. Quoting
     # whichever rank happens to be best would read as picked, and be picked
     lead = next((r for r in ranks if r[0] == DEFAULT_SCOPE), ranks[0] if ranks else None)
@@ -2579,7 +2591,7 @@ def _fw_page(fw, m, lang, ranks, runs, round_name, og_url, lang_url="", achievem
     # so a search snippet for this entry and for its language list read as the
     # same vocabulary rather than two different ways of describing one thing.
     kind_word = "web framework" if kind_has_mode(m.get("type", "emerging")) else "HTTP server"
-    desc = (f"{fw}" + (f" ({lang})" if lang else "") + f" {kind_word} performance: "
+    desc = (f"{label}" + (f" ({lang})" if lang else "") + f" {kind_word} performance: "
             + (f"ranked {lead[1]} of {lead[2]} in HttpArena, " if lead else "benchmarked in HttpArena, ")
             + f"compared on throughput, latency, CPU and memory over {len(runs)} runs.")
     graph = [
@@ -2588,7 +2600,7 @@ def _fw_page(fw, m, lang, ranks, runs, round_name, og_url, lang_url="", achievem
          "publisher": {"@id": SITE + "/#org"}, "about": {"@id": url + "#software"},
          "mainEntityOfPage": url,
          **({"dateModified": updated} if updated else {})},
-        {"@type": "SoftwareApplication", "@id": url + "#software", "name": fw,
+        {"@type": "SoftwareApplication", "@id": url + "#software", "name": label,
          "applicationCategory": "DeveloperApplication",
          **({"programmingLanguage": lang} if lang else {}),
          **({"codeRepository": m["repo"]} if m.get("repo") else {}),
@@ -2596,7 +2608,7 @@ def _fw_page(fw, m, lang, ranks, runs, round_name, og_url, lang_url="", achievem
         {"@type": "BreadcrumbList", "@id": url + "#crumbs", "itemListElement": [
             {"@type": "ListItem", "position": 1, "name": "Frameworks",
              "item": SITE + "/frameworks/"},
-            {"@type": "ListItem", "position": 2, "name": fw, "item": url}]},
+            {"@type": "ListItem", "position": 2, "name": label, "item": url}]},
     ] + _org_nodes()
     head = ('<!doctype html><html lang="en" data-theme=""><head>'
             '<meta charset="utf-8">'
@@ -2622,7 +2634,7 @@ def _fw_page(fw, m, lang, ranks, runs, round_name, og_url, lang_url="", achievem
               '<div class="top-links">' + _CHROME[1] + '</div>'
               '</header>')
     body = ('<div class="docs-layout one-col"><main class="doc-main">'
-            '<article class="doc-wrap"><h1 class="doc-title">' + e(fw) + "</h1>"
+            '<article class="doc-wrap"><h1 class="doc-title">' + e(label) + "</h1>"
             + _fw_body(fw, m, lang, ranks, runs, round_name, lang_url, achievements,
                        lang_scopes, updated, has_compare)
             + "</article></main></div>")
@@ -2653,13 +2665,13 @@ def _lang_faq(lang, scopes, n_entries, round_name):
         qa.append((
             f"What is the fastest {lang} web framework?" if is_fw
             else f"What is the fastest {lang} HTTP server?",
-            f"{fw}"
+            f"{_fw_label(fw)}"
             + ("" if is_fw else f", {_a_kind(kind)},")
             + f" leads the {lang} entries in HttpArena with a composite score of "
               f"{score:.0f} on {SCOPE_NAME[DEFAULT_SCOPE]}, measured over {round_name}. "
               f"The composite sums a normalized score across the profiles of a family, "
               f"where the leader of each profile scores 100. Against every language, "
-              f"{fw} ranks {rank} of {of} in its own league."
+              f"{_fw_label(fw)} ranks {rank} of {of} in its own league."
             + (f" It is a tuned entry, so it is ranked in the field that includes "
                f"tuned configurations." if tuned else "")))
         if not is_fw:
@@ -2667,8 +2679,8 @@ def _lang_faq(lang, scopes, n_entries, round_name):
             if top_fw:
                 qa.append((
                     f"What is the fastest {lang} web framework?",
-                    f"{top_fw[0]}, with a composite of {top_fw[3]:.0f} on "
-                    f"{SCOPE_NAME[DEFAULT_SCOPE]}. {fw} scores higher but is "
+                    f"{_fw_label(top_fw[0])}, with a composite of {top_fw[3]:.0f} on "
+                    f"{SCOPE_NAME[DEFAULT_SCOPE]}. {_fw_label(fw)} scores higher but is "
                     f"{_a_kind(kind)}, not a framework, and is ranked in its own league."))
     for scope, rows in scopes.items():
         if scope == DEFAULT_SCOPE or not rows:
@@ -2676,7 +2688,7 @@ def _lang_faq(lang, scopes, n_entries, round_name):
         fw, _k, _t, score, rank, of, _l, _lr, _lo = rows[0]
         qa.append((
             f"What is the fastest {lang} {SCOPE_NAME[scope]} server?",
-            f"{fw}, with a composite of {score:.0f} on {SCOPE_NAME[scope]} and "
+            f"{_fw_label(fw)}, with a composite of {score:.0f} on {SCOPE_NAME[scope]} and "
             f"{rank} of {of} against all languages in its league."))
     qa.append((
         f"How many {lang} web frameworks are benchmarked?",
@@ -2688,7 +2700,7 @@ def _lang_faq(lang, scopes, n_entries, round_name):
         fw = lead[0][0]
         qa.append((
             f"Is {lang} fast for web servers?",
-            f"The quickest {lang} entry, {fw}, places {lead[0][4]} of {lead[0][5]} on "
+            f"The quickest {lang} entry, {_fw_label(fw)}, places {lead[0][4]} of {lead[0][5]} on "
             f"{SCOPE_NAME[DEFAULT_SCOPE]} across every language in its league, so that "
             f"placing is the honest answer for {lang} at its best rather than for "
             f"{lang} in general. The tables below show the spread across all "
@@ -2728,7 +2740,7 @@ def _lang_page(lang, scopes, all_entries, round_name, siblings=(), updated="",
         body = "".join(
             '<tr><td><a href="%s">%s</a></td><td>%s</td><td>%.0f</td>'
             '<td><a href="%s">%d of %d</a></td><td>%s</td></tr>'
-            % (_fw_url(fw), e(fw),
+            % (_fw_url(fw), e(_fw_label(fw)),
                e(TYPE_LABEL.get(kind, kind)) + (' <span class="fw-kind">tuned</span>'
                                                 if tuned else ""),
                score, e(link), rank, of,
@@ -2741,7 +2753,7 @@ def _lang_page(lang, scopes, all_entries, round_name, siblings=(), updated="",
     has_tuned = any(r[2] for rows in scopes.values() for r in rows)
     listed = {fw for rows in scopes.values() for fw, *_ in rows}
     rest = sorted((fw for fw, _k in all_entries if fw not in listed), key=str.lower)
-    every = "".join('<li><a href="%s">%s</a></li>' % (_fw_url(fw), e(fw))
+    every = "".join('<li><a href="%s">%s</a></li>' % (_fw_url(fw), e(_fw_label(fw)))
                     for fw, _k in sorted(all_entries, key=lambda x: x[0].lower()))
 
     ranked = scopes.get(DEFAULT_SCOPE) or (next(iter(scopes.values())) if scopes else [])
@@ -2795,13 +2807,13 @@ def _lang_page(lang, scopes, all_entries, round_name, siblings=(), updated="",
             top_fw = next((r for r in lead_row if kind_has_mode(r[1])), None)
             if top_fw:
                 extra = (' The quickest %s <i>framework</i> is <a href="%s"><b>%s</b></a>, '
-                         'at %.0f.' % (e(lang), _fw_url(top_fw[0]), e(top_fw[0]), top_fw[3]))
+                         'at %.0f.' % (e(lang), _fw_url(top_fw[0]), e(_fw_label(top_fw[0])), top_fw[3]))
         answer = ('<p class="lead-answer">The fastest %s %s in HttpArena is '
                   '<a href="%s"><b>%s</b></a>%s, with a composite of %.0f on %s &mdash; '
                   '<a href="%s">%d of %d</a> against every language in its league. '
                   'Measured over %s, every entry on the same machine.%s%s</p>'
                   % (e(lang), "web framework" if is_fw else "HTTP server",
-                     _fw_url(fw), e(fw), "" if is_fw else " (%s)" % e(_a_kind(kind)),
+                     _fw_url(fw), e(_fw_label(fw)), "" if is_fw else " (%s)" % e(_a_kind(kind)),
                      score, e(SCOPE_NAME[DEFAULT_SCOPE]),
                      e(link), rank, of, e(round_name),
                      " This is a tuned entry." if tuned else "", extra))
@@ -2864,7 +2876,7 @@ def _fw_index_page(entries, lang_pages=(), updated="", compare_langs=()):
     sections = []
     for lang in sorted(by_lang, key=lambda x: (x == "Other", x.lower())):
         items = "".join('<li><a href="%s">%s</a> <span class="fw-kind">%s</span></li>'
-                        % (_fw_url(fw), e(fw), e(TYPE_LABEL.get(kind, kind)))
+                        % (_fw_url(fw), e(_fw_label(fw)), e(TYPE_LABEL.get(kind, kind)))
                         for fw, kind in sorted(by_lang[lang], key=lambda x: x[0].lower()))
         # Languages whose entries have no composite anywhere get no summary page,
         # so the heading stays plain text rather than linking to a 404.
@@ -2998,7 +3010,7 @@ def _cmp_table(data, views, a, b):
     return ('<table class="cmp-table"><thead><tr><th>Profile</th><th>Conns</th>'
             '<th class="n">%s req/sec</th><th class="n">%s req/sec</th><th class="n">Delta</th>'
             '<th class="n">%s p99</th><th class="n">%s p99</th></tr></thead><tbody>'
-            % (e(a), e(b), e(a), e(b)) + "".join(body) + "</tbody></table>")
+            % (e(_fw_label(a)), e(_fw_label(b)), e(_fw_label(a)), e(_fw_label(b))) + "".join(body) + "</tbody></table>")
 
 
 def _cmp_verdict(data, views, scores, a, b):
@@ -3007,10 +3019,10 @@ def _cmp_verdict(data, views, scores, a, b):
     wa, wb, both = _cmp_wins(data, views, a, b)
     if not both:
         return ("%s and %s share no test profile, so there is nothing to compare directly."
-                % (e(a), e(b)))
+                % (e(_fw_label(a)), e(_fw_label(b))))
     lead, other, wl, wo = (a, b, wa, wb) if wa >= wb else (b, a, wb, wa)
     out = ("<b>%s</b> is quicker than <b>%s</b> on %d of the %d profiles they both run"
-           % (e(lead), e(other), wl, both))
+           % (e(_fw_label(lead)), e(_fw_label(other)), wl, both))
     out += (", and behind on %d." % wo) if wo else "."
     sa, sb = scores.get(a), scores.get(b)
     if sa and sb:
@@ -3021,7 +3033,7 @@ def _cmp_verdict(data, views, scores, a, b):
 
 def _cmp_faq(data, views, scores, pairs, lang):
     e = _html.escape
-    qa = [("Is %s faster than %s?" % (e(a), e(b)),
+    qa = [("Is %s faster than %s?" % (e(_fw_label(a)), e(_fw_label(b))),
            _cmp_verdict(data, views, scores, a, b)
            + " Both run on the same machine, in the same round, against the same profiles.")
           for a, b in pairs[:4]]
@@ -3031,7 +3043,7 @@ def _cmp_faq(data, views, scores, pairs, lang):
                    "%s holds the highest %s composite of the %s, at %.0f. The composite "
                    "is throughput over the whole suite; if a service is one shape of workload, "
                    "compare that profile on its own in the table above, because the order "
-                   "changes." % (e(top), SCOPE_NAME[DEFAULT_SCOPE],
+                   "changes." % (e(_fw_label(top)), SCOPE_NAME[DEFAULT_SCOPE],
                                  ("%s entries" % e(lang)) if lang else "entries it ranks",
                                  scores[top])))
     if not lang:
@@ -3051,6 +3063,7 @@ _CMP_JS = """<script>
       out=document.getElementById('cmpOut'), head=document.getElementById('cmpLead');
   if(!a||!b||!out) return;
   function esc(s){ return String(s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
+  function nameOf(fw){ return (D.labels && D.labels[fw]) || fw; }
   function num(n){ return n.toLocaleString('en-US'); }
   function draw(){
     var x=a.value, y=b.value, rows='', wx=0, wy=0, both=0;
@@ -3065,13 +3078,13 @@ _CMP_JS = """<script>
     }
     out.innerHTML = rows
       ? '<table class="cmp-table"><thead><tr><th>Profile</th><th>Conns</th><th class="n">'
-        +esc(x)+' req/sec</th><th class="n">'+esc(y)+' req/sec</th><th class="n">Delta</th>'
-        +'<th class="n">'+esc(x)+' p99</th><th class="n">'+esc(y)+' p99</th></tr></thead><tbody>'
+        +esc(nameOf(x))+' req/sec</th><th class="n">'+esc(nameOf(y))+' req/sec</th><th class="n">Delta</th>'
+        +'<th class="n">'+esc(nameOf(x))+' p99</th><th class="n">'+esc(nameOf(y))+' p99</th></tr></thead><tbody>'
         +rows+'</tbody></table>'
       : '<p>These two entries share no test profile.</p>';
     if(head) head.innerHTML = both
-      ? '<b>'+esc(wx>=wy?x:y)+'</b> is quicker on '+Math.max(wx,wy)+' of the '+both
-        +' profiles they both run, <b>'+esc(wx>=wy?y:x)+'</b> on '+Math.min(wx,wy)+'.'
+      ? '<b>'+esc(nameOf(wx>=wy?x:y))+'</b> is quicker on '+Math.max(wx,wy)+' of the '+both
+        +' profiles they both run, <b>'+esc(nameOf(wx>=wy?y:x))+'</b> on '+Math.min(wx,wy)+'.'
       : 'These two entries share no test profile.';
     if(location.hash.slice(1)!==x+'-vs-'+y) history.replaceState(null,'','#'+x+'-vs-'+y);
   }
@@ -3169,7 +3182,7 @@ def _compare_page(lang, ranked, members, profiles, results, round_name, updated,
     def opts(cur):
         def one(fw):
             return ('<option value="%s"%s>%s</option>'
-                    % (e(fw), " selected" if fw == cur else "", e(fw)))
+                    % (e(fw), " selected" if fw == cur else "", e(_fw_label(fw))))
         if lang or not fw_lang:
             return "".join(one(fw) for fw in entries)
         # Every entry in one flat list is not something anyone can pick from, and
@@ -3182,7 +3195,7 @@ def _compare_page(lang, ranked, members, profiles, results, round_name, updated,
                        % (e(l), "".join(one(fw) for fw in by[l]))
                        for l in sorted(by, key=str.lower))
 
-    quick = " · ".join('<a href="#%s-vs-%s">%s vs %s</a>' % (e(x), e(y), e(x), e(y))
+    quick = " · ".join('<a href="#%s-vs-%s">%s vs %s</a>' % (e(x), e(y), e(_fw_label(x)), e(_fw_label(y)))
                        for x, y in pairs[:6])
     graph = [
         {"@type": "WebPage", "@id": url + "#page", "name": title, "description": desc,
@@ -3240,7 +3253,7 @@ def _compare_page(lang, ranked, members, profiles, results, round_name, updated,
             + ("<h2>Common comparisons</h2><p>" + quick + "</p>" if quick else "")
             + "<h2>Questions</h2>" + _faq_html(qa)
             + ("<h2>Every " + e(lang) + " entry</h2><ul>"
-               + "".join('<li><a href="%s">%s</a></li>' % (_fw_url(fw), e(fw))
+               + "".join('<li><a href="%s">%s</a></li>' % (_fw_url(fw), e(_fw_label(fw)))
                          for fw in entries)
                + "</ul>" if lang else "")
             + _updated_line(updated,
@@ -3255,7 +3268,8 @@ def _compare_page(lang, ranked, members, profiles, results, round_name, updated,
                              '<a href="/">Open the leaderboard</a>'))
             + "</div></article></main></div>")
     payload = js_payload("CMP", {"v": [[k, p["label"], c] for k, p, c in views],
-                                 "d": data, "e": entries})
+                                 "d": data, "e": entries,
+                                 "labels": {fw: _fw_label(fw) for fw in entries if _fw_label(fw) != fw}})
     return (head + header + body + "<script>" + payload + "</script>" + _CMP_JS
             + _THEME_TOGGLE + "</body></html>")
 
@@ -3350,7 +3364,7 @@ def build_compare_pages(profiles, results, lang_rows, members_by_lang, compare_l
         if with_og:
             _og_card(dest / "og.png", "Head to head · " + SCOPE_NAME[DEFAULT_SCOPE],
                      lang + " web frameworks, compared",
-                     [(r[0], "%.0f" % r[3]) for r in rows[:5]],
+                     [(_fw_label(r[0]), "%.0f" % r[3]) for r in rows[:5]],
                      "%d entries · %s · www.http-arena.com" % (len(members), round_name))
             cards += 1
         written.append((lang, len(members)))
@@ -3477,7 +3491,7 @@ def build_fw_pages(profiles, results, meta, fw_lang, badge_index, achievements,
                      lang in compare_langs),
             encoding="utf-8")
         if with_og:
-            _og_card(dest / "og.png", "Benchmark results", fw,
+            _og_card(dest / "og.png", "Benchmark results", _fw_label(fw),
                      [(SCOPE_NAME[s], "#%d of %d" % (rank, field))
                       for s, rank, field, _, _link in ranks],
                      " · ".join(x for x in [lang, TYPE_LABEL.get(kind, kind),
@@ -3511,7 +3525,7 @@ def build_og_images(content, trails, rows, fw_lang, round_name):
         return "", 0
 
     GEN.mkdir(parents=True, exist_ok=True)
-    top = [(fw, "%.0f" % score) for fw, score in rows[:5]]
+    top = [(_fw_label(fw), "%.0f" % score) for fw, score in rows[:5]]
     _og_card(GEN / "og.png",
              "Composite ranking · " + SCOPE_NAME[DEFAULT_SCOPE],
              "Which web framework is actually fastest?",
@@ -3554,6 +3568,8 @@ def main():
                 "language": m.get("language", ""),
                 "repo": m.get("repo", ""),
                 "dir": m.get("dir", ""),
+                **({"display_name": m["display_name"]} if m.get("display_name") else {}),
+                **({"log_dir": m["log_dir"]} if m.get("log_dir") else {}),
                 "engine": m.get("engine", ""),
                 "cmp": m.get("completeness"),
                 "desc": m.get("description", ""),

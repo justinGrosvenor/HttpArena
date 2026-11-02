@@ -781,6 +781,8 @@ document.addEventListener('DOMContentLoaded', function(){
          + '<path fill="none" stroke="#fff" stroke-width="2.1" stroke-linejoin="round" d="m12 6.6 1.6 3.4 3.6.5-2.6 2.6.6 3.7-3.2-1.8-3.2 1.8.6-3.7-2.6-2.6 3.6-.5z"/>'
          + '</svg></span>';
   }
+  // Labels may change while historical result IDs and saved links stay stable.
+  function nameOf(fw){ return (D.meta[fw] && D.meta[fw].display_name) || fw; }
   function repoOf(fw){ return D.meta[fw] && D.meta[fw].repo; }
   function langOf(fw){ return FWLANG[fw] || ''; }
   function engineOf(fw){ return (D.meta[fw] && D.meta[fw].engine) || ''; }
@@ -811,7 +813,7 @@ document.addEventListener('DOMContentLoaded', function(){
     var s=(state.q||'').toLowerCase().trim(); if(!s) return true;
     var terms=s.split(',').map(function(t){ return t.trim(); }).filter(Boolean);
     if(!terms.length) return true;
-    var name=(fw||'').toLowerCase(), lg=(lang||langOf(fw)||'').toLowerCase(), eng=engineOf(fw).toLowerCase();
+    var name=((fw||'')+' '+nameOf(fw)).toLowerCase(), lg=(lang||langOf(fw)||'').toLowerCase(), eng=engineOf(fw).toLowerCase();
     function hit(t){ return name.indexOf(t)>=0 || lg.indexOf(t)>=0 || eng.indexOf(t)>=0; }
     var pos=[], neg=[];
     terms.forEach(function(t){ if(t.charAt(0)==='!'){ var n=t.slice(1).trim(); if(n) neg.push(n); } else pos.push(t); });
@@ -898,7 +900,7 @@ document.addEventListener('DOMContentLoaded', function(){
     var why=nc?(p.scored===false
         ? ' \u00b7 reference profile, not part of the composite'
         : ' \u00b7 ran, but not counted toward this type\u2019s composite'):'';
-    return '<div class="dh">'+esc(fw)+'</div><div class="dsub">'+esc(p.label)
+    return '<div class="dh">'+esc(nameOf(fw))+'</div><div class="dsub">'+esc(p.label)
          + (p.category?' \u00b7 '+esc(p.category):'')+esc(why)+'</div>'+blocks
          + (foot?'<div class="dfoot">'+esc(foot)+'</div>':'');
   }
@@ -969,7 +971,7 @@ document.addEventListener('DOMContentLoaded', function(){
     var impl='https://github.com/MDA2AV/HttpArena/tree/main/frameworks/'+encodeURIComponent(dir);
     var h='<div class="modal-card">'
       + '<button class="modal-x" data-close aria-label="Close">×</button>'
-      + '<div class="modal-h"><span class="dot" style="background:'+c.accent+'"></span><h3>'+esc(fw)+'</h3>'+tlsCheckBadge(fw)+'<span class="badge b-'+t+'" data-tip="'+esc(typeTip(t))+'">'+typeAbbr(t)+'</span>'+tunedPill(fw)+'</div>'
+      + '<div class="modal-h"><span class="dot" style="background:'+c.accent+'"></span><h3>'+esc(nameOf(fw))+'</h3>'+tlsCheckBadge(fw)+'<span class="badge b-'+t+'" data-tip="'+esc(typeTip(t))+'">'+typeAbbr(t)+'</span>'+tunedPill(fw)+'</div>'
       + '<div class="modal-meta">'+esc([lang, m.engine, typeAbbr(t), modeOf(fw)==='tuned'?'tuned':'',
           cmpDecl(fw)&&CMP_TYPES.indexOf(t)>=0 ? 'completeness '+(4-cmpMissing(fw).length)+'/4' : ''].filter(Boolean).join(' · '))+'</div>';
     if(m.desc) h+='<p class="modal-desc">'+esc(m.desc)+'</p>';
@@ -988,7 +990,7 @@ document.addEventListener('DOMContentLoaded', function(){
     if(m.repo) h+='<a href="'+esc(m.repo)+'" target="_blank" rel="noopener"><span>Official repository</span><span>↗</span></a>';
     h+='<a href="'+impl+'" target="_blank" rel="noopener"><span>Benchmark implementation</span><span>↗</span></a>';
     if(state.view==='profile' && state.profile && state.conns){
-      var log=LOGBASE+state.profile+'/'+state.conns+'/'+encodeURIComponent(dir)+'.log';
+      var log=LOGBASE+state.profile+'/'+state.conns+'/'+encodeURIComponent(m.log_dir||dir)+'.log';
       h+='<a href="'+log+'" target="_blank" rel="noopener"><span>Run log - '+esc(PROF[state.profile].label)+' · '+state.conns+'c</span><span>↗</span></a>';
     }
     h+='</div></div>';
@@ -1861,7 +1863,7 @@ document.addEventListener('DOMContentLoaded', function(){
     th+='<th class="spacer"></th>';
     var body=rows.map(function(r){
       var c=lc(r.lang), rank=rankMap[r.fw], t=typeOf(r.fw), repo=repoOf(r.fw);
-      var nm=esc(r.fw);
+      var nm=esc(nameOf(r.fw));
       var pct=r.score/maxScore*100;
       var fav=favs.has(r.fw);
       var tr='<tr class="'+(fav?'fav':'')+'" data-fw-row="'+esc(r.fw)+'">'
@@ -2022,7 +2024,7 @@ document.addEventListener('DOMContentLoaded', function(){
   }
   function profileCell(k, r, x){
     if(k==='rank') return '<div class="c rank'+(x.rank<=3?' r'+x.rank:'')+'">'+x.rank+'</div>';
-    if(k==='fw'){ var nm=esc(r.fw); return '<div class="c fw">'+starHtml(r.fw)+'<span class="tndslot">'+tunedPill(r.fw,'tnd')+'</span><span class="tsq tsq-'+x.t+'" data-tip="'+esc(typeTip(x.t))+'"></span><span class="lang" style="color:'+(x.dark?x.lc.textDark:x.lc.text)+'">'+esc(r.lang||'')+'</span><span class="nm">'+nm+'</span>'+tlsCheckBadge(r.fw)+'</div>'; }
+    if(k==='fw'){ var nm=esc(nameOf(r.fw)); return '<div class="c fw">'+starHtml(r.fw)+'<span class="tndslot">'+tunedPill(r.fw,'tnd')+'</span><span class="tsq tsq-'+x.t+'" data-tip="'+esc(typeTip(x.t))+'"></span><span class="lang" style="color:'+(x.dark?x.lc.textDark:x.lc.text)+'">'+esc(r.lang||'')+'</span><span class="nm">'+nm+'</span>'+tlsCheckBadge(r.fw)+'</div>'; }
     if(k==='rps'){ var pct=x.maxRps>0?Math.max((r.rps||0)/x.maxRps*100,(r.rps>0?1.5:0)):0; return '<div class="c meter"><span class="mtop"><span class="v'+(r.rps>0?'':' zero')+'">'+fmt(r.rps||0)+'</span>'+statusHtml(r)+'</span><span class="bar"><i style="width:'+pct.toFixed(1)+'%;background:rgba('+x.lc.rgb+','+(x.dark?0.55:0.42)+')"></i></span></div>'; }
     if(k==='bw') return '<div class="c num sub">'+esc(r.bandwidth||'-')+'</div>';
     if(k==='bwreq'){ var b=bw(r.bandwidth), q=r.rps||0; return '<div class="c num sub">'+(b>0&&q>0?fmtBytes(b/q):'-')+'</div>'; }

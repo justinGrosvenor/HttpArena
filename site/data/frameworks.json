@@ -1874,7 +1874,9 @@
       "middleware": true,
       "request": true,
       "response": true
-    }
+    },
+    "display_name": "swerver-ts",
+    "log_dir": "swerverts"
   },
   "swoole": {
     "dir": "swoole",
